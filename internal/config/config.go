@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 type AppConfig struct {
@@ -111,6 +112,7 @@ type TracingConfig struct {
 }
 
 var C AppConfig
+var ConsulCC *ConsulCenter
 
 func Load() (*AppConfig, error) {
 	viper.SetConfigName("config")
@@ -129,6 +131,23 @@ func Load() (*AppConfig, error) {
 
 	if err := viper.Unmarshal(&C); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	// 尝试连接Consul拉取远程配置（连接失败则使用本地配置）
+	if C.Consul.Address != "" {
+		cc, err := NewConsulCenter(C.Consul)
+		if err != nil {
+			zap.L().Warn("consul connect failed, using local config", zap.Error(err))
+		} else {
+			if err := cc.ApplyToViper(); err != nil {
+				zap.L().Warn("consul load config failed, using local config", zap.Error(err))
+			} else {
+				// 重新解析，让Consul配置覆盖本地值
+				_ = viper.Unmarshal(&C)
+				ConsulCC = cc
+				zap.L().Info("consul config applied")
+			}
+		}
 	}
 
 	return &C, nil

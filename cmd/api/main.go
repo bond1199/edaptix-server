@@ -56,6 +56,13 @@ func main() {
 
 	zapLogger.Info("database connected")
 
+	// Start Consul config watch (hot-reload)
+	if config.ConsulCC != nil {
+		config.ConsulCC.WatchConfig(context.Background())
+		zapLogger.Info("consul config watch started")
+		defer config.ConsulCC.StopWatch()
+	}
+
 	// Initialize Redis
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     cfg.Redis.Addr(),
