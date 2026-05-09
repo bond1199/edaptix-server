@@ -43,21 +43,21 @@ jwt:
 ai:
   flash:
     base_url: "https://api.deepseek.com"
-    api_key: "YOUR_API_KEY_HERE"
+    api_key: "sk-207af9bc8b9b4c8f816a0b7e2ab92fb7"
     timeout: 30
     model_name: "deepseek-chat"
     max_tokens: 4096
   pro:
     base_url: "https://api.deepseek.com"
-    api_key: "YOUR_API_KEY_HERE"
+    api_key: "sk-207af9bc8b9b4c8f816a0b7e2ab92fb7"
     timeout: 60
     model_name: "deepseek-reasoner"
     max_tokens: 8192
   ocr:
     engine: baidu-api
     fallback: baidu-api
-    baidu_api_key: "YOUR_BAIDU_API_KEY_HERE"
-    baidu_secret_key: "YOUR_BAIDU_SECRET_KEY_HERE"
+    baidu_api_key: "rJ5uA0mAW2jDGrAFwEQWhPSk"
+    baidu_secret_key: "fZBLzllfpnlRTEQT5BtosU11Uwh4I4l8"
 
 log:
   level: debug

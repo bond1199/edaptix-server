@@ -1,81 +1,100 @@
 package model
 
 import (
+	"encoding/json"
 	"time"
-
-	"gorm.io/gorm"
 )
 
-// LearningUpload 学习数据上传批次
+// LearningUpload 上传批次表
 type LearningUpload struct {
-	ID          uint           `gorm:"primaryKey" json:"id"`
-	StudentID   uint           `gorm:"index;not null" json:"student_id"`
-	Subject     string         `gorm:"type:varchar(20);not null" json:"subject"`
-	SourceType  string         `gorm:"type:varchar(30);not null" json:"source_type"` // photo, pdf, manual
-	Status      string         `gorm:"type:varchar(20);not null;default:pending" json:"status"` // pending, processing, completed, failed
-	ItemCount   int            `gorm:"default:0" json:"item_count"`
-	OCRResult   string         `gorm:"type:text" json:"ocr_result"`     // OCR原始结果JSON
-	AIResult    string         `gorm:"type:text" json:"ai_result"`      // AI解析结果JSON
-	ErrorMsg    string         `gorm:"type:text" json:"error_msg"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
-
-	Student User        `gorm:"foreignKey:StudentID" json:"student,omitempty"`
-	Items   []UploadItem `gorm:"foreignKey:UploadID" json:"items,omitempty"`
+	ID         int64          `gorm:"primaryKey" json:"id"`
+	UserID     int64          `gorm:"not null;index" json:"user_id"`
+	UploadType string         `gorm:"type:varchar(20);not null" json:"upload_type"` // catalog/homework/exam/answer_sheet
+	Source     string         `gorm:"type:varchar(20);not null" json:"source"`       // camera/album
+	Subject    string         `gorm:"type:varchar(30);not null;default:''" json:"subject"`
+	Status     int16          `gorm:"type:smallint;not null;default:1;index" json:"status"` // 1:待处理 2:AI处理中 3:已完成 4:处理失败
+	PageCount  int            `gorm:"not null;default:0" json:"page_count"`
+	CreatedAt  time.Time      `json:"created_at"`
 }
 
 func (LearningUpload) TableName() string {
 	return "learning_uploads"
 }
 
-// UploadItem 上传项（单张图片/PDF页）
+// UploadItem 上传素材明细表
 type UploadItem struct {
-	ID           uint           `gorm:"primaryKey" json:"id"`
-	UploadID     uint           `gorm:"index;not null" json:"upload_id"`
-	FileURL      string         `gorm:"type:varchar(500);not null" json:"file_url"`
-	FileType     string         `gorm:"type:varchar(10)" json:"file_type"` // jpg, png, pdf
-	PageNum      int            `gorm:"default:0" json:"page_num"`         // PDF页码
-	OCRText      string         `gorm:"type:text" json:"ocr_text"`
-	OCRConfidence float64       `json:"ocr_confidence"`
-	Status       string         `gorm:"type:varchar(20);not null;default:pending" json:"status"` // pending, processed, failed
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
-
-	Upload LearningUpload `gorm:"foreignKey:UploadID" json:"-"`
+	ID            int64          `gorm:"primaryKey" json:"id"`
+	UploadID      int64          `gorm:"not null;index" json:"upload_id"`
+	ImageURL      string         `gorm:"type:varchar(500);not null" json:"image_url"`
+	PageIndex     int            `gorm:"not null;default:0" json:"page_index"`
+	IsValid       bool           `gorm:"not null;default:true" json:"is_valid"`
+	InvalidReason string         `gorm:"type:varchar(50)" json:"invalid_reason"`
+	OCRResult     json.RawMessage `gorm:"type:jsonb" json:"ocr_result"`
+	CreatedAt     time.Time      `json:"created_at"`
 }
 
 func (UploadItem) TableName() string {
 	return "upload_items"
 }
 
-// ErrorQuestion 错题记录
+// ErrorQuestion 错题表
 type ErrorQuestion struct {
-	ID             uint           `gorm:"primaryKey" json:"id"`
-	StudentID      uint           `gorm:"index;not null" json:"student_id"`
-	UploadID       uint           `gorm:"index" json:"upload_id"`
-	Subject        string         `gorm:"type:varchar(20);not null; json:"subject"`
-	KnowledgeNodeID *uint         `gorm:"index" json:"knowledge_node_id"`                 // 关联知识点
-	QuestionText   string         `gorm:"type:text;not null" json:"question_text"`        // 题目内容
-	QuestionImage  string         `gorm:"type:varchar(500)" json:"question_image"`        // 题目图片URL
-	StudentAnswer  string         `gorm:"type:text" json:"student_answer"`                // 学生作答
-	CorrectAnswer  string         `gorm:"type:text" json:"correct_answer"`                // 正确答案
-	ErrorType      string         `gorm:"type:varchar(30)" json:"error_type"`             // 计算错误, 概念混淆, 审题不清, 方法不当
-	Difficulty     int            `gorm:"type:smallint;default:3" json:"difficulty"`      // 难度1-5
-	SourceExam     string         `gorm:"type:varchar(100)" json:"source_exam"`           // 来源试卷
-	Mastered       bool           `gorm:"default:false" json:"mastered"`                  // 是否已掌握
-	ReviewCount    int            `gorm:"default:0" json:"review_count"`                  // 复习次数
-	NextReviewAt   *time.Time     `json:"next_review_at"`                                  // 下次复习时间(间隔重复)
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
-	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
-
-	Student        User           `gorm:"foreignKey:StudentID" json:"-"`
-	Upload         LearningUpload `gorm:"foreignKey:UploadID" json:"-"`
-	KnowledgeNode  *KnowledgeNode `gorm:"foreignKey:KnowledgeNodeID" json:"knowledge_node,omitempty"`
+	ID               int64     `gorm:"primaryKey" json:"id"`
+	UserID           int64     `gorm:"not null;index" json:"user_id"`
+	Subject          string    `gorm:"type:varchar(30);not null;index:idx_eq_subject" json:"subject"`
+	KnowledgeNodeID  *int64    `gorm:"index" json:"knowledge_node_id"`
+	QuestionType     string    `gorm:"type:varchar(30);not null" json:"question_type"`
+	QuestionContent  string    `gorm:"type:text;not null" json:"question_content"`
+	CorrectAnswer    string    `gorm:"type:text" json:"correct_answer"`
+	StudentAnswer    string    `gorm:"type:text" json:"student_answer"`
+	ErrorType        string    `gorm:"type:varchar(20);not null" json:"error_type"` // wrong/blank/guessed
+	SourceType       string    `gorm:"type:varchar(20);not null" json:"source_type"` // homework/exam/daily_task
+	SourceID         *int64    `json:"source_id"`
+	Difficulty       int16     `gorm:"type:smallint;not null;default:1" json:"difficulty"`
+	ReviewCount      int       `gorm:"not null;default:0" json:"review_count"`
+	LastReviewed     *time.Time `json:"last_reviewed"`
+	IsResolved       bool      `gorm:"not null;default:false;index" json:"is_resolved"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 func (ErrorQuestion) TableName() string {
 	return "error_questions"
+}
+
+// QuestionBank 题库表
+type QuestionBank struct {
+	ID              int64           `gorm:"primaryKey" json:"id"`
+	Subject         string          `gorm:"type:varchar(30);not null" json:"subject"`
+	Grade           int16           `gorm:"not null" json:"grade"`
+	KnowledgeNodeID *int64          `gorm:"index" json:"knowledge_node_id"`
+	QuestionType    string          `gorm:"type:varchar(30);not null" json:"question_type"`
+	Difficulty      int16           `gorm:"type:smallint;not null;default:1" json:"difficulty"`
+	Content         string          `gorm:"type:text;not null" json:"content"`
+	Options         json.RawMessage `gorm:"type:jsonb" json:"options"`
+	Answer          string          `gorm:"type:text;not null" json:"answer"`
+	Analysis        string          `gorm:"type:text" json:"analysis"`
+	Source          string          `gorm:"type:varchar(30);not null;default:'ai'" json:"source"`
+	ExamFrequency   int16           `gorm:"type:smallint;not null;default:1;index" json:"exam_frequency"`
+	IsValid         bool            `gorm:"not null;default:true" json:"is_valid"`
+	UsageCount      int             `gorm:"not null;default:0" json:"usage_count"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+}
+
+func (QuestionBank) TableName() string {
+	return "question_bank"
+}
+
+// UserQuestionHistory 用户已做题目记录
+type UserQuestionHistory struct {
+	ID          int64     `gorm:"primaryKey" json:"id"`
+	UserID      int64     `gorm:"not null;index" json:"user_id"`
+	QuestionID  int64     `gorm:"not null;index" json:"question_id"`
+	TaskItemID  *int64    `json:"task_item_id"`
+	IsCorrect   *bool     `json:"is_correct"`
+	AnsweredAt  time.Time `gorm:"not null;default:now()" json:"answered_at"`
+}
+
+func (UserQuestionHistory) TableName() string {
+	return "user_question_history"
 }
