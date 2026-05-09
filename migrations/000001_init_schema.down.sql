@@ -1,0 +1,18 @@
+-- edaptix-server 回滚迁移
+DROP TABLE IF EXISTS learning_reports CASCADE;
+DROP TABLE IF EXISTS student_ability_tiers CASCADE;
+DROP TABLE IF EXISTS integrity_profiles CASCADE;
+DROP TABLE IF EXISTS risk_records CASCADE;
+DROP TABLE IF EXISTS user_question_history CASCADE;
+DROP TABLE IF EXISTS task_items CASCADE;
+DROP TABLE IF EXISTS daily_tasks CASCADE;
+DROP TABLE IF EXISTS question_bank CASCADE;
+DROP TABLE IF EXISTS error_questions CASCADE;
+DROP TABLE IF EXISTS upload_items CASCADE;
+DROP TABLE IF EXISTS learning_uploads CASCADE;
+DROP TABLE IF EXISTS knowledge_nodes CASCADE;
+DROP TABLE IF EXISTS knowledge_trees CASCADE;
+DROP TABLE IF EXISTS parent_student_bindings CASCADE;
+DROP TABLE IF EXISTS parent_accounts CASCADE;
+DROP TABLE IF EXISTS student_profiles CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
