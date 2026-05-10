@@ -1,2 +1,5 @@
 bin/
 *.exe
+
+# Config files (contain secrets, do not commit)
+internal/config/config.yaml

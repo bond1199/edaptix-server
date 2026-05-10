@@ -15,17 +15,17 @@ import (
 
 // ConsulCenter Consul配置中心
 type ConsulCenter struct {
-	client       *api.Client
-	prefix       string
-	cache        sync.Map
-	mu           sync.RWMutex
-	watching     bool
-	cancel       context.CancelFunc
-	onChangeCb   ConfigChangeCallback
+	client     *api.Client
+	prefix     string
+	cache      sync.Map
+	mu         sync.RWMutex
+	watching   bool
+	cancel     context.CancelFunc
+	onChangeCb ConfigChangeCallback
 }
 
 // NewConsulCenter 创建Consul配置中心
-func NewConsulCenter(cfg ConsulConfig) (*ConsulCenter, error) {
+func NewConsulCenter(cfg ConsulConfig, env string) (*ConsulCenter, error) {
 	consulConfig := api.DefaultConfig()
 	if cfg.Address != "" {
 		consulConfig.Address = cfg.Address
@@ -41,7 +41,7 @@ func NewConsulCenter(cfg ConsulConfig) (*ConsulCenter, error) {
 
 	prefix := cfg.Prefix
 	if prefix != "" && !strings.HasSuffix(prefix, "/") {
-		prefix += "/"
+		prefix = env + "/" + prefix
 	}
 
 	return &ConsulCenter{

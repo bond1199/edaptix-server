@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/edaptix/server/internal/ai/llm"
 	"github.com/edaptix/server/internal/ai/ocr"
@@ -133,7 +132,7 @@ func (s *KnowledgeTreeService) InitFromCatalog(ctx context.Context, userID int64
 	}
 
 	// Step 6: 构建知识节点（五级结构）
-	nodes, err := s.buildKnowledgeNodes(tree.ID, catalogResult)
+	nodes, parentMappings, err := s.buildKnowledgeNodes(tree.ID, catalogResult)
 	if err != nil {
 		_ = s.treeRepo.UpdateTreeStatus(ctx, tree.ID, 3) // 处理失败
 		_ = s.dataRepo.UpdateUploadStatus(ctx, upload.ID, 4)
@@ -144,6 +143,13 @@ func (s *KnowledgeTreeService) InitFromCatalog(ctx context.Context, userID int64
 		_ = s.treeRepo.UpdateTreeStatus(ctx, tree.ID, 3)
 		_ = s.dataRepo.UpdateUploadStatus(ctx, upload.ID, 4)
 		return nil, fmt.Errorf("保存知识节点失败: %w", err)
+	}
+
+	// Step 6.1: 回填ParentID（GORM Create后已自动填充节点ID）
+	if err := s.updateParentIDs(ctx, nodes, parentMappings); err != nil {
+		_ = s.treeRepo.UpdateTreeStatus(ctx, tree.ID, 3)
+		_ = s.dataRepo.UpdateUploadStatus(ctx, upload.ID, 4)
+		return nil, fmt.Errorf("回填父节点ID失败: %w", err)
 	}
 
 	// Step 7: 更新状态
@@ -164,13 +170,21 @@ func (s *KnowledgeTreeService) InitFromCatalog(ctx context.Context, userID int64
 	}, nil
 }
 
+// parentMapping 记录节点索引到其父节点索引的映射
+type parentMapping struct {
+	childIdx  int
+	parentIdx int
+}
+
 // buildKnowledgeNodes 从AI解析结果构建知识节点
-func (s *KnowledgeTreeService) buildKnowledgeNodes(treeID int64, catalog *llm.CatalogParseResult) ([]model.KnowledgeNode, error) {
+// 返回：节点列表、父子映射（用于插入后回填ParentID）、错误
+func (s *KnowledgeTreeService) buildKnowledgeNodes(treeID int64, catalog *llm.CatalogParseResult) ([]model.KnowledgeNode, []parentMapping, error) {
 	var nodes []model.KnowledgeNode
-	now := time.Now()
+	var mappings []parentMapping
 	sortOrder := 0
 
 	// Level 1: 年级节点
+	gradeIdx := len(nodes)
 	gradeNode := model.KnowledgeNode{
 		TreeID:    treeID,
 		ParentID:  nil,
@@ -182,35 +196,35 @@ func (s *KnowledgeTreeService) buildKnowledgeNodes(treeID int64, catalog *llm.Ca
 	sortOrder++
 
 	// Level 2: 科目节点
+	subjectIdx := len(nodes)
 	subjectNode := model.KnowledgeNode{
 		TreeID:    treeID,
-		ParentID:  nil, // 将在插入后回填
+		ParentID:  nil,
 		Level:     2,
 		Name:      catalog.Subject,
 		SortOrder: sortOrder,
 	}
 	nodes = append(nodes, subjectNode)
+	mappings = append(mappings, parentMapping{childIdx: subjectIdx, parentIdx: gradeIdx})
 	sortOrder++
 
-	// 记录章的索引，用于回填ParentID
-	chapterStartIdx := len(nodes)
-
-	for ci, chapter := range catalog.Chapters {
+	for _, chapter := range catalog.Chapters {
 		// Level 3: 章节节点
+		chapterIdx := len(nodes)
 		chapterNode := model.KnowledgeNode{
 			TreeID:    treeID,
-			ParentID:  nil, // 将在插入后回填
+			ParentID:  nil,
 			Level:     3,
 			Name:      chapter.Name,
 			SortOrder: sortOrder,
 		}
 		nodes = append(nodes, chapterNode)
+		mappings = append(mappings, parentMapping{childIdx: chapterIdx, parentIdx: subjectIdx})
 		sortOrder++
 
-		sectionStartIdx := len(nodes)
-
-		for si, section := range chapter.Sections {
+		for _, section := range chapter.Sections {
 			// Level 4: 小节节点
+			sectionIdx := len(nodes)
 			sectionNode := model.KnowledgeNode{
 				TreeID:    treeID,
 				ParentID:  nil,
@@ -219,10 +233,12 @@ func (s *KnowledgeTreeService) buildKnowledgeNodes(treeID int64, catalog *llm.Ca
 				SortOrder: sortOrder,
 			}
 			nodes = append(nodes, sectionNode)
+			mappings = append(mappings, parentMapping{childIdx: sectionIdx, parentIdx: chapterIdx})
 			sortOrder++
 
 			// Level 5: 知识点节点
 			for ki, kp := range section.KnowledgePoints {
+				kpIdx := len(nodes)
 				kpNode := model.KnowledgeNode{
 					TreeID:    treeID,
 					ParentID:  nil,
@@ -231,24 +247,35 @@ func (s *KnowledgeTreeService) buildKnowledgeNodes(treeID int64, catalog *llm.Ca
 					SortOrder: ki,
 				}
 				nodes = append(nodes, kpNode)
+				mappings = append(mappings, parentMapping{childIdx: kpIdx, parentIdx: sectionIdx})
 			}
-
-			// 回填小节节点的ParentID为章节节点
-			_ = sectionStartIdx
-			_ = si
-			_ = ci
 		}
 	}
 
-	_ = chapterStartIdx
-	_ = now
+	return nodes, mappings, nil
+}
 
-	// 注意：ParentID回填需要在数据库插入后获取ID
-	// 这里采用两阶段策略：先插入所有节点，再更新ParentID
-	// 但为了简化，我们使用内存中的索引关系
-	// 在实际CreateNodes后，需要二次更新ParentID
+// updateParentIDs 根据父子映射回填ParentID
+// 前提：nodes 已通过 CreateNodes 插入数据库，GORM 已自动填充各节点的 ID
+func (s *KnowledgeTreeService) updateParentIDs(ctx context.Context, nodes []model.KnowledgeNode, mappings []parentMapping) error {
+	if len(mappings) == 0 {
+		return nil
+	}
 
-	return nodes, nil
+	var updates []struct {
+		NodeID   int64
+		ParentID int64
+	}
+	for _, m := range mappings {
+		parentID := nodes[m.parentIdx].ID
+		childID := nodes[m.childIdx].ID
+		updates = append(updates, struct {
+			NodeID   int64
+			ParentID int64
+		}{NodeID: childID, ParentID: parentID})
+	}
+
+	return s.treeRepo.BatchUpdateParentIDs(ctx, updates)
 }
 
 // GetInitStatus 获取用户初始化状态

@@ -9,16 +9,16 @@ import (
 )
 
 type AppConfig struct {
-	App      AppConfigStruct      `mapstructure:"app"`
-	Database DatabaseConfig       `mapstructure:"database"`
-	Redis    RedisConfig          `mapstructure:"redis"`
-	RabbitMQ RabbitMQConfig       `mapstructure:"rabbitmq"`
-	MinIO    MinIOConfig          `mapstructure:"minio"`
-	Consul   ConsulConfig         `mapstructure:"consul"`
-	JWT      JWTConfig            `mapstructure:"jwt"`
-	AI       AIConfig             `mapstructure:"ai"`
-	Log      LogConfig            `mapstructure:"log"`
-	Tracing  TracingConfig        `mapstructure:"tracing"`
+	App      AppConfigStruct `mapstructure:"app"`
+	Database DatabaseConfig  `mapstructure:"database"`
+	Redis    RedisConfig     `mapstructure:"redis"`
+	RabbitMQ RabbitMQConfig  `mapstructure:"rabbitmq"`
+	MinIO    MinIOConfig     `mapstructure:"minio"`
+	Consul   ConsulConfig    `mapstructure:"consul"`
+	JWT      JWTConfig       `mapstructure:"jwt"`
+	AI       AIConfig        `mapstructure:"ai"`
+	Log      LogConfig       `mapstructure:"log"`
+	Tracing  TracingConfig   `mapstructure:"tracing"`
 }
 
 type AppConfigStruct struct {
@@ -94,9 +94,9 @@ type AIModelConfig struct {
 }
 
 type OCRConfig struct {
-	Engine       string `mapstructure:"engine"`
-	Fallback     string `mapstructure:"fallback"`
-	BaiduAPIKey  string `mapstructure:"baidu_api_key"`
+	Engine         string `mapstructure:"engine"`
+	Fallback       string `mapstructure:"fallback"`
+	BaiduAPIKey    string `mapstructure:"baidu_api_key"`
 	BaiduSecretKey string `mapstructure:"baidu_secret_key"`
 }
 
@@ -135,7 +135,7 @@ func Load() (*AppConfig, error) {
 
 	// 尝试连接Consul拉取远程配置（连接失败则使用本地配置）
 	if C.Consul.Address != "" {
-		cc, err := NewConsulCenter(C.Consul)
+		cc, err := NewConsulCenter(C.Consul, C.App.Env)
 		if err != nil {
 			zap.L().Warn("consul connect failed, using local config", zap.Error(err))
 		} else {

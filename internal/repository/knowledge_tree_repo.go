@@ -17,6 +17,11 @@ func NewKnowledgeTreeRepo(db *gorm.DB) *KnowledgeTreeRepo {
 	return &KnowledgeTreeRepo{db: db}
 }
 
+// DB 获取底层*gorm.DB（用于复杂查询）
+func (r *KnowledgeTreeRepo) DB() *gorm.DB {
+	return r.db
+}
+
 // CreateTree 创建知识树
 func (r *KnowledgeTreeRepo) CreateTree(ctx context.Context, tree *model.KnowledgeTree) error {
 	return r.db.WithContext(ctx).Create(tree).Error
@@ -109,6 +114,28 @@ func (r *KnowledgeTreeRepo) CountNodesByTree(ctx context.Context, treeID int64) 
 	return count, err
 }
 
+// UpdateNodeParentID 更新单个节点的ParentID
+func (r *KnowledgeTreeRepo) UpdateNodeParentID(ctx context.Context, nodeID int64, parentID int64) error {
+	return r.db.WithContext(ctx).Model(&model.KnowledgeNode{}).Where("id = ?", nodeID).
+		Update("parent_id", parentID).Error
+}
+
+// BatchUpdateParentIDs 批量更新节点的ParentID
+func (r *KnowledgeTreeRepo) BatchUpdateParentIDs(ctx context.Context, updates []struct {
+	NodeID   int64
+	ParentID int64
+}) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	for _, u := range updates {
+		if err := r.UpdateNodeParentID(ctx, u.NodeID, u.ParentID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // --- 学情上传相关 ---
 
 // LearningDataRepo 学情数据仓库
@@ -119,6 +146,11 @@ type LearningDataRepo struct {
 // NewLearningDataRepo 创建学情数据仓库
 func NewLearningDataRepo(db *gorm.DB) *LearningDataRepo {
 	return &LearningDataRepo{db: db}
+}
+
+// DB 获取底层*gorm.DB（用于复杂查询）
+func (r *LearningDataRepo) DB() *gorm.DB {
+	return r.db
 }
 
 // CreateUpload 创建上传记录

@@ -98,6 +98,7 @@ func main() {
 	userRepo := repository.NewUserRepo(db)
 	treeRepo := repository.NewKnowledgeTreeRepo(db)
 	dataRepo := repository.NewLearningDataRepo(db)
+	taskRepo := repository.NewTaskRepo(db)
 
 	// Initialize services
 	userSvc := service.NewUserService(
@@ -115,10 +116,29 @@ func main() {
 		db,
 	)
 
+	learningSvc := service.NewLearningDataService(
+		dataRepo,
+		treeRepo,
+		ocrPipeline,
+		minioProvider,
+	)
+
+	questionAlgorithm := service.NewQuestionAlgorithm(taskRepo, treeRepo)
+
+	taskSvc := service.NewTaskService(
+		taskRepo,
+		treeRepo,
+		userRepo,
+		questionAlgorithm,
+		llmClient,
+	)
+
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(userSvc)
 	uploadHandler := handler.NewUploadHandler(minioProvider)
 	initHandler := handler.NewInitHandler(knowledgeTreeSvc)
+	learningHandler := handler.NewLearningHandler(learningSvc)
+	taskHandler := handler.NewTaskHandler(taskSvc)
 
 	// Create Gin engine
 	gin.SetMode(gin.ReleaseMode)
@@ -180,26 +200,36 @@ func main() {
 		uploadGroup.POST("/image", uploadHandler.UploadImage)
 	}
 
-	// Placeholder routes (to be implemented)
+	// Learning data routes
+	learningGroup := v1.Group("/learning")
+	learningGroup.Use(authMw)
+	{
+		learningGroup.POST("/upload", learningHandler.Upload)
+		learningGroup.GET("/uploads", learningHandler.GetUploads)
+		learningGroup.GET("/uploads/:id", learningHandler.GetUploadDetail)
+		learningGroup.GET("/errors", learningHandler.GetErrors)
+		learningGroup.GET("/stats", learningHandler.GetStats)
+	}
+
+	// Task routes (Phase 2: implemented)
+	taskGroup := v1.Group("/tasks")
+	taskGroup.Use(authMw)
+	{
+		taskGroup.POST("/generate", taskHandler.GenerateTask)
+		taskGroup.GET("/today", taskHandler.GetTodayTask)
+		taskGroup.GET("/history", taskHandler.GetTaskHistory)
+		taskGroup.GET("/:id", taskHandler.GetTaskDetail)
+		taskGroup.POST("/:id/start", taskHandler.StartTask)
+		taskGroup.POST("/:id/answer", taskHandler.SubmitAnswer)
+		taskGroup.POST("/:id/finish", taskHandler.FinishTask)
+	}
+
+	// Placeholder routes (to be implemented in Phase 3/4)
 	placeholderGroups := map[string][]struct {
 		method  string
 		path    string
 		name    string
 	}{
-		"learning": {
-			{"POST", "/upload", "learning/upload"},
-			{"GET", "/uploads", "learning/uploads"},
-			{"GET", "/errors", "learning/errors"},
-			{"GET", "/stats", "learning/stats"},
-		},
-		"tasks": {
-			{"GET", "/today", "tasks/today"},
-			{"GET", "/history", "tasks/history"},
-			{"GET", "/:id", "tasks/detail"},
-			{"POST", "/:id/start", "tasks/start"},
-			{"POST", "/:id/answer", "tasks/answer"},
-			{"POST", "/:id/finish", "tasks/finish"},
-		},
 		"grading": {
 			{"GET", "/results/:task_id", "grading/results"},
 			{"GET", "/detail/:item_id", "grading/detail"},
